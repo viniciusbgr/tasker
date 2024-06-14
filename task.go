@@ -1,4 +1,4 @@
-package tasker
+package service
 
 import (
 	"errors"
@@ -6,42 +6,38 @@ import (
 )
 
 var (
-	TaskAlreadyStarterd error = errors.New("task already started")
-	TaskNotStarted      error = errors.New("task not started")
+	ErrTaskAlreadyStarterd error = errors.New("task already started")
+	ErrTaskNotStarted      error = errors.New("task not started")
 )
+
+type TaskStopSignal struct{}
 
 type Task struct {
 	Name     string
-	Interval time.Duration
-	stopChan chan struct{}
-	Func     func(stop chan<- struct{})
+	Func     func()        // Function to be executed
+	stop     chan TaskStopSignal
+	isRun    bool
+	Ticker   *time.Ticker
 }
 
 func (t *Task) run() {
-	ticker := time.NewTicker(t.Interval)
-
 	for {
 		select {
-		case <-t.stopChan:
-			ticker.Stop()
-			break
-		case <-ticker.C:
-			t.Func(t.stopChan)
+		case <-t.stop:
+			t.Ticker.Stop()
+			t.isRun = false
+			return
+		case <-t.Ticker.C:
+			t.Func()
 		}
 	}
 }
-
 func (t *Task) Start() error {
-	if t.stopChan != nil {
-		_, isClosed := <-t.stopChan
-
-		if !isClosed {
-			return TaskAlreadyStarterd
-
-		}
+	if t.isRun {
+		return ErrTaskAlreadyStarterd
 	}
-
-	t.stopChan = make(chan struct{})
+	t.stop = make(chan TaskStopSignal, 1)
+	t.isRun = true
 
 	go t.run()
 
@@ -49,10 +45,13 @@ func (t *Task) Start() error {
 }
 
 func (t *Task) Stop() error {
-	if t.stopChan == nil {
-		return TaskNotStarted
+	if !t.isRun {
+		return ErrTaskNotStarted
 	}
-	close(t.stopChan)
+
+	t.stop <- TaskStopSignal{}
+
+	t.isRun = false
 
 	return nil
 }
