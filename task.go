@@ -2,47 +2,55 @@ package tasker
 
 import (
 	"errors"
-	"log"
 	"time"
 )
 
-const (
-	TaskAlreadyStarterd string = "task already started"
-	TaskNotStarted      string = "task not started"
+var (
+	TaskAlreadyStarterd error = errors.New("task already started")
+	TaskNotStarted      error = errors.New("task not started")
 )
 
 type Task struct {
 	Name     string
 	Interval time.Duration
 	stopChan chan struct{}
-	Func     func(stop chan<- struct{}, args ...any)
+	Func     func(stop chan<- struct{})
 }
 
-func (t *Task) Run(args ...any) error {
-	if t.stopChan != nil {
-		return errors.New(TaskAlreadyStarterd)
-	}
-
-	t.stopChan = make(chan struct{})
-
+func (t *Task) run() {
 	ticker := time.NewTicker(t.Interval)
 
 	for {
 		select {
 		case <-t.stopChan:
 			ticker.Stop()
-
-			return nil
+			break
 		case <-ticker.C:
-			log.Printf("Start execution task \"%s\"", t.Name)
-			t.Func(t.stopChan, args...)
+			t.Func(t.stopChan)
 		}
 	}
 }
 
+func (t *Task) Start() error {
+	if t.stopChan != nil {
+		_, isClosed := <-t.stopChan
+
+		if !isClosed {
+			return TaskAlreadyStarterd
+
+		}
+	}
+
+	t.stopChan = make(chan struct{})
+
+	go t.run()
+
+	return nil
+}
+
 func (t *Task) Stop() error {
 	if t.stopChan == nil {
-		return errors.New(TaskNotStarted)
+		return TaskNotStarted
 	}
 	close(t.stopChan)
 

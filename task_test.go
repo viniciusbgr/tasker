@@ -6,19 +6,24 @@ import (
 	"time"
 )
 
-func Benchmark_Allocs_task(b *testing.B) {
+func TestAllocsCreateTask(t *testing.T) {
 	task := &tasker.Task{
-		Name:     "Task bentchmark Allocs",
+		Name:     "Task test for allocs on start.",
 		Interval: time.Second,
-		Func: func(stop chan<- struct{}, _ ...any) {
-			b.Log("Bingo!!")
+		Func: func(stop chan<- struct{}) {
+			t.Log("Bingo!!")
 		},
 	}
-	go task.Run()
+	allocs := testing.AllocsPerRun(100, func() {
+		if err := task.Start(); err != nil {
+			t.Fatal(err)
+		}
 
-	time.Sleep(2 * time.Second)
+		time.Sleep(5 * time.Second)
+		task.Stop()
+	})
 
-	if err := task.Stop(); err != nil {
-		panic(err)
+	if allocs != 0 {
+		t.Fatalf("expected 0 allocs, got %v", allocs)
 	}
 }
