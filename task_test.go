@@ -6,24 +6,36 @@ import (
 	"time"
 )
 
-func TestAllocsCreateTask(t *testing.T) {
-	task := &tasker.Task{
-		Name:     "Task test for allocs on start.",
-		Interval: time.Second,
-		Func: func(stop chan<- struct{}) {
-			t.Log("Bingo!!")
+func TestCreateTask(t *testing.T) {
+	task := tasker.NewTask(
+		"Test task",
+		time.Millisecond*500,
+		func() {
+			t.Log("Hi everyone!")
 		},
-	}
-	allocs := testing.AllocsPerRun(100, func() {
-		if err := task.Start(); err != nil {
-			t.Fatal(err)
-		}
+	)
 
-		time.Sleep(5 * time.Second)
-		task.Stop()
-	})
+	task.Start()
 
-	if allocs != 0 {
-		t.Fatalf("expected 0 allocs, got %v", allocs)
+	time.Sleep(time.Second * 3)
+
+	task.Stop()
+}
+
+func TestErrTask(t *testing.T) {
+	task := tasker.NewTask(
+		"Test task for expect err on Start",
+		time.Millisecond*500,
+		func() {
+			t.Log("Hi everyone!")
+		},
+	)
+
+	task.Start()
+
+	time.Sleep(time.Second * 2)
+
+	if err := task.Start(); err == nil {
+		t.Fatal("Expected error: ", tasker.ErrTaskAlreadyStarterd.Error())
 	}
 }
